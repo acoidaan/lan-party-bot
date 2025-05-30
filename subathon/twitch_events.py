@@ -1,5 +1,5 @@
 from flask import Flask, request
-from timer import timer
+from timer_instance import timer
 import json
 import hmac
 import hashlib
