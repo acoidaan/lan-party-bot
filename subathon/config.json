@@ -1,0 +1,5 @@
+{
+  "channels": ["xstellar_", "andresmanueh"],
+  "overlay_path": "overlay_timer.txt",
+  "webhook_port": 5001
+}
