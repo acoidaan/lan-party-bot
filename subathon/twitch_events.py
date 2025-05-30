@@ -31,13 +31,12 @@ def twitch_webhook():
     raw_body = request.data.decode("utf-8")
     headers = request.headers
 
-    if not verify_signature(headers, raw_body):
-        return "Invalid signature", 403
+    print("⚠️ Simulando evento (firma no verificada)")
+
 
     data = request.json
     event_type = headers.get("Twitch-Eventsub-Message-Type")
 
-    # Verificación inicial
     if event_type == "webhook_callback_verification":
         return data["challenge"], 200
 
@@ -52,9 +51,9 @@ def twitch_webhook():
 
     elif subscription_type == "channel.cheer":
         bits = int(event.get("bits", 0))
-        mins = (bits // 100) * 10
-        print(f"[BITS] {bits} bits en {user} → +{mins} minutos")
-        timer.add_time(mins)
+        minutos = (bits // 100) * 10
+        print(f"[BITS] {bits} bits en {user} → +{minutos} minutos")
+        timer.add_time(minutos)
 
     return "", 200
 

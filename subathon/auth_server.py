@@ -48,9 +48,12 @@ def callback():
     # Guarda tokens en twitch_auth.json
     try:
         with open("twitch_auth.json", "r") as f:
-            auth_data = json.load(f)
+            content = f.read().strip()
+            auth_data = json.loads(content) if content else {}
     except FileNotFoundError:
         auth_data = {}
+
+
 
     auth_data[username] = {
         "access_token": access_token,

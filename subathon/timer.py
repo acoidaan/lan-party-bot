@@ -32,7 +32,7 @@ class SubathonTimer:
         def update_loop():
             while True:
                 self.save_to_file()
-                time.sleep(10)
+                time.sleep(1)
 
         t = threading.Thread(target=update_loop, daemon=True)
         t.start()
