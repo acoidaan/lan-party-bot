@@ -4,7 +4,16 @@ import json
 import hmac
 import hashlib
 import os
+import threading
+import time
 from dotenv import load_dotenv
+
+# Importar socketio solo si está disponible
+try:
+    import socketio
+    SOCKETIO_AVAILABLE = True
+except ImportError:
+    SOCKETIO_AVAILABLE = False
 
 load_dotenv()
 
@@ -12,6 +21,15 @@ app = Flask(__name__)
 
 # Configuración para Twitch
 TWITCH_SECRET = os.getenv("TWITCH_EVENTSUB_SECRET", "djs8Dd01Ad28k38z")
+
+# Tokens de Socket API de Streamlabs
+SOCKET_TOKENS = {
+    "xstellar_": os.getenv("STREAMLABS_SOCKET_XSTELLAR"),
+    "andresmanueh": os.getenv("STREAMLABS_SOCKET_ANDRES")
+}
+
+# Cliente Socket global
+streamlabs_clients = {}
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -94,27 +112,26 @@ HTML_TEMPLATE = """
             border-radius: 4px;
             font-size: 1em;
         }
-        .endpoints-info {
-            margin: 2em 0;
-            padding: 1em;
-            background: #222;
-            border-radius: 8px;
-            font-size: 0.9em;
-            text-align: left;
-        }
-        .endpoint {
-            margin: 0.5em 0;
+        .connection-status {
+            margin: 1em 0;
             padding: 0.5em;
             background: #333;
             border-radius: 4px;
-            font-family: monospace;
+            font-size: 0.9em;
         }
+        .connected { color: #4CAF50; }
+        .disconnected { color: #ff6b6b; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1 id="timer">00:00:00</h1>
         <div class="status" id="status">Cargando...</div>
+        
+        <div class="connection-status">
+            <div>🎮 Twitch EventSub: <span class="connected">Conectado</span></div>
+            <div id="streamlabs-status">💰 Streamlabs Socket: <span id="socket-status" class="disconnected">Desconectado</span></div>
+        </div>
         
         <div class="controls">
             <button class="btn-add" onclick="addTime(5)">+5 min</button>
@@ -136,15 +153,6 @@ HTML_TEMPLATE = """
                 <input type="number" id="setMinutes" placeholder="Establecer tiempo total" min="1" max="9999">
                 <button onclick="setTime()" style="background: #9C27B0;">Establecer timer</button>
             </div>
-        </div>
-
-        <div class="endpoints-info">
-            <h3>📡 Endpoints Disponibles:</h3>
-            <div class="endpoint">🎥 Interfaz Web: {{ base_url }}/</div>
-            <div class="endpoint">💰 Donaciones: {{ base_url }}/webhook</div>
-            <div class="endpoint">🎮 Twitch Events: {{ base_url }}/twitch</div>
-            <div class="endpoint">🔗 Auth Callback: {{ base_url }}/callback</div>
-            <div class="endpoint">📊 API Status: {{ base_url }}/health</div>
         </div>
     </div>
 
@@ -178,6 +186,24 @@ HTML_TEMPLATE = """
                 .catch(error => {
                     console.error('Error fetching time:', error);
                     document.getElementById("status").textContent = "❌ Error de conexión";
+                });
+        }
+
+        function checkSocketStatus() {
+            fetch("/socket_status")
+                .then(response => response.json())
+                .then(data => {
+                    const statusElement = document.getElementById("socket-status");
+                    if (data.connected > 0) {
+                        statusElement.textContent = `Conectado (${data.connected} canales)`;
+                        statusElement.className = "connected";
+                    } else {
+                        statusElement.textContent = "Desconectado";
+                        statusElement.className = "disconnected";
+                    }
+                })
+                .catch(error => {
+                    document.getElementById("socket-status").textContent = "Error";
                 });
         }
 
@@ -280,46 +306,119 @@ HTML_TEMPLATE = """
 
         // Actualizar cada segundo
         setInterval(fetchTime, 1000);
+        setInterval(checkSocketStatus, 5000);
         
         // Primera carga
         fetchTime();
+        checkSocketStatus();
     </script>
 </body>
 </html>
 """
 
-def verify_twitch_signature(headers, body):
-    """Verifica la firma de Twitch EventSub"""
-    message_id = headers.get("Twitch-Eventsub-Message-Id")
-    timestamp = headers.get("Twitch-Eventsub-Message-Timestamp")
-    signature = headers.get("Twitch-Eventsub-Message-Signature")
+# ================================
+# STREAMLABS SOCKET CLIENT INTEGRADO
+# ================================
 
-    if not all([message_id, timestamp, signature]):
-        return False
+def setup_streamlabs_socket():
+    """Configura clientes Socket de Streamlabs integrados"""
+    if not SOCKETIO_AVAILABLE:
+        print("⚠️ python-socketio no está instalado. Socket API deshabilitado.")
+        return
+    
+    connected_count = 0
+    
+    for channel, token in SOCKET_TOKENS.items():
+        if token.startswith("tu_socket_token_"):
+            print(f"⚠️ Token no configurado para {channel}")
+            continue
+            
+        try:
+            # Crear cliente Socket.IO
+            sio = socketio.Client()
+            
+            @sio.event
+            def connect():
+                print(f"🎉 Socket conectado - {channel}")
+                
+            @sio.event  
+            def disconnect():
+                print(f"🔌 Socket desconectado - {channel}")
+            
+            @sio.event
+            def event(data):
+                """Procesa eventos de Streamlabs"""
+                try:
+                    event_type = data.get('type')
+                    
+                    if event_type == 'donation':
+                        process_streamlabs_donation(data, channel)
+                    elif event_type == 'follow':
+                        print(f"👥 [{channel}] FOLLOW: {data.get('message', [{}])[0].get('name', 'Anónimo')}")
+                    else:
+                        print(f"📝 [{channel}] Evento no procesado: {event_type}")
+                        
+                except Exception as e:
+                    print(f"❌ Error procesando evento {channel}: {e}")
+            
+            # Conectar
+            url = f"https://sockets.streamlabs.com?token={token}"
+            sio.connect(url)
+            streamlabs_clients[channel] = sio
+            connected_count += 1
+            
+        except Exception as e:
+            print(f"❌ Error conectando Socket {channel}: {e}")
+    
+    if connected_count > 0:
+        print(f"✅ {connected_count} canal(es) Socket conectado(s)")
+    
+    return connected_count
 
-    hmac_message = message_id + timestamp + body
-    expected_signature = "sha256=" + hmac.new(
-        TWITCH_SECRET.encode("utf-8"),
-        hmac_message.encode("utf-8"),
-        hashlib.sha256
-    ).hexdigest()
-
-    return hmac.compare_digest(signature, expected_signature)
+def process_streamlabs_donation(data, channel):
+    """Procesa donaciones de Streamlabs usando el timer compartido"""
+    try:
+        messages = data.get('message', [])
+        
+        for donation in messages:
+            amount = float(donation.get('amount', 0))
+            name = donation.get('name', 'Anónimo')
+            message = donation.get('message', '')
+            currency = donation.get('currency', 'USD')
+            
+            # Conversión de moneda simplificada
+            if currency == 'EUR':
+                amount_eur = amount
+            elif currency == 'USD':
+                amount_eur = amount * 0.85
+            else:
+                amount_eur = amount
+            
+            # 10 minutos por euro
+            minutes = int(amount_eur * 10)
+            
+            print(f"💰 [{channel}] DONACIÓN Socket: {name} donó {amount} {currency} → +{minutes} min")
+            if message:
+                print(f"   💬 Mensaje: {message}")
+            
+            # ✅ USAR EL TIMER COMPARTIDO
+            timer.add_time(minutes)
+            
+    except Exception as e:
+        print(f"❌ Error procesando donación Socket {channel}: {e}")
 
 # ================================
-# INTERFAZ WEB PRINCIPAL
+# RUTAS DE LA API
 # ================================
 
 @app.route("/")
 def index():
-    base_url = request.host_url.rstrip('/')
-    return render_template_string(HTML_TEMPLATE, base_url=base_url)
+    return render_template_string(HTML_TEMPLATE)
 
 @app.route("/api/time")
 def api_time():
     try:
         remaining = timer.get_remaining()
-        # ✅ USAR EL MÉTODO DE FORMATO DEL TIMER
         time_str = timer.format_time(remaining)
         
         return jsonify({
@@ -334,6 +433,16 @@ def api_time():
             "paused": False,
             "status": "error"
         }), 500
+
+@app.route("/socket_status")
+def socket_status():
+    """Estado de conexiones Socket"""
+    connected = len([c for c in streamlabs_clients.values() if c.connected])
+    return jsonify({
+        "connected": connected,
+        "total": len(SOCKET_TOKENS),
+        "channels": list(streamlabs_clients.keys())
+    })
 
 @app.route("/add_time", methods=["POST"])
 def add_time():
@@ -384,30 +493,29 @@ def resume():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 # ================================
-# WEBHOOKS DE DONACIONES
+# WEBHOOKS DE DONACIONES (BACKUP)
 # ================================
 
 @app.route("/webhook", methods=["POST"])
 def handle_donation():
-    """Webhook para donaciones de Streamlabs"""
+    """Webhook para donaciones - backup del Socket API"""
     try:
         data = request.json
-        print("[DONACIÓN] Evento recibido:")
+        print("[DONACIÓN] Webhook recibido:")
         print(json.dumps(data, indent=2))
 
-        # Procesar donaciones de Streamlabs
         messages = data.get("message", [])
         for donation in messages:
             amount = float(donation.get("amount", 0))
             nombre = donation.get("from", "Desconocido")
-            minutos = int(amount * 10)  # 10 minutos por euro
+            minutos = int(amount * 10)
 
-            print(f"[DONACIÓN] {nombre} donó {amount}€ → +{minutos} minutos")
+            print(f"[DONACIÓN] Webhook: {nombre} donó {amount}€ → +{minutos} minutos")
             timer.add_time(minutos)
 
         return jsonify({"status": "ok"}), 200
     except Exception as e:
-        print(f"❌ Error procesando donación: {e}")
+        print(f"❌ Error procesando donación webhook: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 # ================================
@@ -426,24 +534,22 @@ def twitch_webhook():
         data = request.json
         event_type = headers.get("Twitch-Eventsub-Message-Type")
 
-        # Verificación de webhook (requerido por Twitch)
         if event_type == "webhook_callback_verification":
             challenge = data.get("challenge", "")
             print(f"✅ Verificación de webhook: {challenge}")
             return challenge, 200
 
-        # Procesar eventos
         event = data.get("event", {})
         subscription_type = data.get("subscription", {}).get("type")
         user = event.get("broadcaster_user_name", "").lower()
 
         if subscription_type == "channel.subscribe":
             print(f"[SUB] Nueva suscripción en {user}")
-            timer.add_time(30)  # 30 minutos por sub
+            timer.add_time(30)
 
         elif subscription_type == "channel.cheer":
             bits = int(event.get("bits", 0))
-            minutos = (bits // 100) * 10  # 10 min cada 100 bits
+            minutos = (bits // 100) * 10
             print(f"[BITS] {bits} bits en {user} → +{minutos} minutos")
             timer.add_time(minutos)
 
@@ -453,43 +559,8 @@ def twitch_webhook():
         print(f"❌ Error procesando evento de Twitch: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-# ================================
-# AUTENTICACIÓN DE TWITCH
-# ================================
-
-@app.route("/auth")
-def twitch_auth():
-    """Inicia el proceso de autenticación con Twitch"""
-    CLIENT_ID = os.getenv("TWITCH_CLIENT_ID")
-    REDIRECT_URI = os.getenv("TWITCH_REDIRECT_URI")
-    SCOPES = os.getenv("TWITCH_SCOPES")
-    
-    auth_url = (
-        f"https://id.twitch.tv/oauth2/authorize"
-        f"?client_id={CLIENT_ID}"
-        f"&redirect_uri={REDIRECT_URI}"
-        f"&response_type=code"
-        f"&scope={SCOPES}"
-    )
-    
-    return f'<a href="{auth_url}">Autorizar con Twitch</a>'
-
-@app.route("/callback")
-def auth_callback():
-    """Callback de autenticación de Twitch"""
-    code = request.args.get("code")
-    if not code:
-        return "Error: No se recibió código de autorización", 400
-    
-    return "Autorización completada. Puedes cerrar esta pestaña."
-
-# ================================
-# ENDPOINTS DE ESTADO
-# ================================
-
 @app.route("/health")
 def health():
-    """Endpoint para verificar estado del sistema"""
     try:
         remaining = timer.get_remaining()
         time_str = timer.format_time(remaining)
@@ -499,50 +570,22 @@ def health():
             "timer_running": True,
             "current_time": time_str,
             "is_paused": timer.is_paused(),
-            "endpoints": {
-                "web_interface": "/",
-                "donations": "/webhook",
-                "twitch_events": "/twitch",
-                "twitch_auth": "/auth",
-                "api_time": "/api/time",
-                "add_time": "/add_time",
-                "set_time": "/set_time"
-            }
+            "streamlabs_connected": len(streamlabs_clients)
         })
     except Exception as e:
-        return jsonify({
-            "status": "error",
-            "message": str(e)
-        }), 500
-
-@app.route("/test")
-def test_endpoints():
-    """Endpoint para testear que todo funciona"""
-    try:
-        remaining = timer.get_remaining()
-        time_str = timer.format_time(remaining)
-        
-        return jsonify({
-            "message": "¡Todos los servicios están funcionando!",
-            "timer": time_str,
-            "paused": timer.is_paused(),
-            "available_endpoints": [
-                "/ - Interfaz web",
-                "/webhook - Donaciones", 
-                "/twitch - Eventos Twitch",
-                "/health - Estado del sistema",
-                "/api/time - API del timer",
-                "/add_time - Añadir tiempo",
-                "/set_time - Establecer tiempo"
-            ]
-        })
-    except Exception as e:
-        return jsonify({
-            "error": str(e)
-        }), 500
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == "__main__":
-    print("🚀 Iniciando servidor consolidado en puerto 5000...")
+    print("🚀 Iniciando servidor consolidado con Socket API...")
+    
+    # Configurar Socket API en hilo separado
+    def start_socket_api():
+        time.sleep(2)  # Esperar a que Flask se inicie
+        setup_streamlabs_socket()
+    
+    socket_thread = threading.Thread(target=start_socket_api, daemon=True)
+    socket_thread.start()
+    
     print("🌐 Interfaz web: http://localhost:5000")
     print("💰 Webhook donaciones: http://localhost:5000/webhook") 
     print("🎮 Webhook Twitch: http://localhost:5000/twitch")
