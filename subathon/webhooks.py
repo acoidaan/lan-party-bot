@@ -1,3 +1,4 @@
+# webhooks_enhanced.py - Con sistema de overlays integrado (restaurado completo)
 from flask import Flask, jsonify, request, render_template_string
 from timer_instance import timer
 import json
@@ -31,128 +32,433 @@ SOCKET_TOKENS = {
 # Cliente Socket global
 streamlabs_clients = {}
 
-HTML_TEMPLATE = """
+# Template del overlay limpio (sin partículas)
+OVERLAY_TEMPLATE = """
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Subathon Timer</title>
-    <meta charset="UTF-8" />
+    <title>Subathon Timer Overlay</title>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: transparent;
+            font-family: 'Segoe UI', 'Arial Black', sans-serif;
+            overflow: hidden;
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .timer-container {
+            position: absolute;
+            top: 50px;
+            right: 50px;
+            text-align: center;
+            z-index: 10;
+        }
+
+        .timer-main {
+            font-size: 4em;
+            font-weight: 900;
+            text-shadow: 
+                0 0 10px rgba(255, 255, 255, 0.8),
+                0 0 20px rgba(255, 255, 255, 0.6),
+                0 0 30px rgba(255, 255, 255, 0.4),
+                4px 4px 8px rgba(0, 0, 0, 0.8);
+            color: white;
+            letter-spacing: 0.05em;
+            transition: all 0.3s ease;
+            filter: drop-shadow(0 0 15px rgba(255, 255, 255, 0.7));
+        }
+
+        .timer-main.paused {
+            color: rgb(255, 107, 107);
+            animation: pulse-red 2s infinite;
+        }
+
+        .timer-main.danger {
+            color: rgb(255, 71, 87);
+            animation: danger-pulse 1s infinite;
+        }
+
+        .timer-main.warning {
+            color: rgb(255, 165, 2);
+            animation: warning-glow 2s infinite;
+        }
+
+        .timer-label {
+            font-size: 1.2em;
+            font-weight: 600;
+            margin-top: 10px;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            opacity: 0.9;
+        }
+
+        /* Animaciones */
+        @keyframes pulse-red {
+            0%, 100% { 
+                color: rgb(255, 107, 107);
+                text-shadow: 0 0 20px rgba(255, 107, 107, 0.8);
+            }
+            50% { 
+                color: rgb(255, 82, 82);
+                text-shadow: 0 0 30px rgba(255, 82, 82, 1);
+            }
+        }
+
+        @keyframes danger-pulse {
+            0%, 100% { 
+                color: rgb(255, 71, 87);
+                transform: scale(1);
+                text-shadow: 0 0 25px rgba(255, 71, 87, 1);
+            }
+            50% { 
+                color: rgb(255, 56, 56);
+                transform: scale(1.05);
+                text-shadow: 0 0 35px rgba(255, 56, 56, 1);
+            }
+        }
+
+        @keyframes warning-glow {
+            0%, 100% { 
+                color: rgb(255, 165, 2);
+                text-shadow: 0 0 20px rgba(255, 165, 2, 0.8);
+            }
+            50% { 
+                color: rgb(255, 149, 0);
+                text-shadow: 0 0 30px rgba(255, 149, 0, 1);
+            }
+        }
+
+        /* Efectos de tiempo añadido */
+        .time-added-effect {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 2em;
+            font-weight: bold;
+            color: rgb(76, 175, 80);
+            text-shadow: 0 0 20px rgba(76, 175, 80, 0.8);
+            animation: time-added-animation 2s ease-out forwards;
+            pointer-events: none;
+            z-index: 20;
+        }
+
+        @keyframes time-added-animation {
+            0% {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.5);
+            }
+            20% {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1.2);
+            }
+            100% {
+                opacity: 0;
+                transform: translate(-50%, -100%) scale(1);
+            }
+        }
+
+        @media (max-width: 1200px) {
+            .timer-main { font-size: 3em; }
+            .timer-container { top: 30px; right: 30px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="timer-container">
+        <div id="timer" class="timer-main">00:00:00</div>
+        <div id="label" class="timer-label">SUBATHON TIMER</div>
+    </div>
+
+    <script>
+        let lastTime = '';
+        let lastTimeValue = 0;
+
+        function parseTimeToSeconds(timeStr) {
+            const parts = timeStr.split(':').map(Number);
+            return parts.length === 3 ? parts[0] * 3600 + parts[1] * 60 + parts[2] : 0;
+        }
+
+        function showTimeAddedEffect(addedMinutes) {
+            const effect = document.createElement('div');
+            effect.className = 'time-added-effect';
+            effect.textContent = `+${addedMinutes} min!`;
+            document.body.appendChild(effect);
+            
+            setTimeout(() => {
+                if (effect.parentNode) document.body.removeChild(effect);
+            }, 2000);
+        }
+
+        function updateTimer() {
+            fetch('/api/time')
+                .then(response => response.json())
+                .then(data => {
+                    const timerElement = document.getElementById('timer');
+                    const labelElement = document.getElementById('label');
+                    const currentTime = data.time;
+                    const currentTimeValue = parseTimeToSeconds(currentTime);
+                    
+                    // Detectar tiempo añadido
+                    if (lastTime && currentTimeValue > lastTimeValue + 5) {
+                        const addedSeconds = currentTimeValue - lastTimeValue;
+                        const addedMinutes = Math.round(addedSeconds / 60);
+                        showTimeAddedEffect(addedMinutes);
+                    }
+                    
+                    timerElement.textContent = currentTime;
+                    timerElement.className = 'timer-main';
+                    
+                    if (data.paused) {
+                        timerElement.classList.add('paused');
+                        labelElement.textContent = '⏸ PAUSADO';
+                    } else {
+                        if (currentTimeValue <= 1800) timerElement.classList.add('danger');
+                        else if (currentTimeValue <= 3600) timerElement.classList.add('warning');
+                        labelElement.textContent = 'SUBATHON TIMER';
+                    }
+                    
+                    lastTime = currentTime;
+                    lastTimeValue = currentTimeValue;
+                })
+                .catch(error => {
+                    console.error('Error fetching time:', error);
+                    document.getElementById('timer').textContent = 'ERROR';
+                });
+        }
+
+        updateTimer();
+        setInterval(updateTimer, 1000);
+    </script>
+</body>
+</html>
+"""
+
+# Interfaz completa restaurada
+MAIN_INTERFACE_TEMPLATE = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Subathon Control Panel</title>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         body { 
-            background: #111; 
+            background: linear-gradient(to bottom right, rgb(30, 60, 114), rgb(42, 82, 152));
             color: white; 
             text-align: center; 
             font-family: 'Segoe UI', sans-serif; 
             margin: 0;
             padding: 20px;
+            min-height: 100vh;
         }
+        
         .container {
-            max-width: 800px;
+            max-width: 1000px;
             margin: 0 auto;
         }
+        
+        .timer-display {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 2em;
+            margin: 2em 0;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        }
+        
         h1 { 
             font-size: 5em; 
-            margin: 0.5em 0; 
+            margin: 0.2em 0; 
             text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            transition: all 0.3s ease;
         }
+        
         .paused {
-            color: #ff6b6b;
+            color: rgb(255, 107, 107);
             animation: blink 1s infinite;
         }
+        
         @keyframes blink {
             0%, 50% { opacity: 1; }
-            51%, 100% { opacity: 0.5; }
+            51%, 100% { opacity: 0.7; }
         }
-        .controls {
+        
+        .controls-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1em;
             margin: 2em 0;
         }
+        
         button {
-            background: #333; 
+            background: linear-gradient(to bottom right, rgb(102, 126, 234), rgb(118, 75, 162));
             color: white; 
             padding: 1em 2em; 
-            margin: 0.5em;
             border: none; 
-            border-radius: 8px; 
-            font-size: 1.2em;
+            border-radius: 12px; 
+            font-size: 1.1em;
             cursor: pointer;
             transition: all 0.3s ease;
-            min-width: 120px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
         }
+        
         button:hover { 
-            background: #555; 
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+        
+        .btn-add { background: linear-gradient(to bottom right, rgb(76, 175, 80), rgb(69, 160, 73)); }
+        .btn-pause { background: linear-gradient(to bottom right, rgb(255, 152, 0), rgb(230, 137, 0)); }
+        .btn-resume { background: linear-gradient(to bottom right, rgb(33, 150, 243), rgb(25, 118, 210)); }
+        .btn-set { background: linear-gradient(to bottom right, rgb(156, 39, 176), rgb(123, 31, 162)); }
+        
+        .status-bar {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 1em;
+            margin: 2em 0;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1em;
+        }
+        
+        .status-item {
+            text-align: center;
+        }
+        
+        .status-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-bottom: 0.5em;
+        }
+        
+        .overlay-links {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 15px;
+            padding: 1.5em;
+            margin: 2em 0;
+        }
+        
+        .overlay-links h3 {
+            margin-top: 0;
+            color: rgb(76, 175, 80);
+        }
+        
+        .link-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1em;
+            margin-top: 1em;
+        }
+        
+        .overlay-link {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 1em;
+            border-radius: 8px;
+            text-decoration: none;
+            color: white;
+            transition: all 0.3s ease;
+        }
+        
+        .overlay-link:hover {
+            background: rgba(255, 255, 255, 0.2);
             transform: translateY(-2px);
         }
-        button:active {
-            transform: translateY(0);
-        }
-        .btn-add { background: #4CAF50; }
-        .btn-add:hover { background: #45a049; }
-        .btn-pause { background: #ff9800; }
-        .btn-pause:hover { background: #e68900; }
-        .btn-resume { background: #2196F3; }
-        .btn-resume:hover { background: #1976D2; }
-        .status {
-            margin: 1em 0;
-            font-size: 1.2em;
-            opacity: 0.8;
-        }
-        .manual-add {
+        
+        .manual-controls {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 1.5em;
             margin: 2em 0;
-            padding: 1em;
-            background: #222;
-            border-radius: 8px;
         }
-        .manual-add input {
-            background: #333;
-            color: white;
-            border: 1px solid #555;
-            padding: 0.5em;
-            margin: 0.5em;
-            border-radius: 4px;
-            font-size: 1em;
-        }
-        .connection-status {
+        
+        .input-group {
+            display: flex;
+            gap: 1em;
+            justify-content: center;
+            align-items: center;
             margin: 1em 0;
-            padding: 0.5em;
-            background: #333;
-            border-radius: 4px;
-            font-size: 0.9em;
+            flex-wrap: wrap;
         }
-        .connected { color: #4CAF50; }
-        .disconnected { color: #ff6b6b; }
+        
+        input[type="number"] {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            padding: 0.8em;
+            border-radius: 8px;
+            font-size: 1em;
+            width: 120px;
+        }
+        
+        input[type="number"]:focus {
+            outline: none;
+            border-color: rgb(76, 175, 80);
+        }
+        
+        .connected { color: rgb(76, 175, 80); }
+        .disconnected { color: rgb(255, 107, 107); }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1 id="timer">00:00:00</h1>
-        <div class="status" id="status">Cargando...</div>
-        
-        <div class="connection-status">
-            <div>🎮 Twitch EventSub: <span class="connected">Conectado</span></div>
-            <div id="streamlabs-status">💰 Streamlabs Socket: <span id="socket-status" class="disconnected">Desconectado</span></div>
+        <div class="timer-display">
+            <h1 id="timer">00:00:00</h1>
+            <div class="status" id="status">Cargando...</div>
         </div>
         
-        <div class="controls">
-            <button class="btn-add" onclick="addTime(5)">+5 min</button>
-            <button class="btn-add" onclick="addTime(10)">+10 min</button>
-            <button class="btn-add" onclick="addTime(30)">+30 min</button>
+        <div class="status-bar">
+            <div class="status-item">
+                <div class="status-value">🎮</div>
+                <div>Twitch EventSub</div>
+                <div class="connected">Conectado</div>
+            </div>
+            <div class="status-item">
+                <div class="status-value" id="socket-status">💰</div>
+                <div>Streamlabs Socket</div>
+                <div id="socket-text" class="disconnected">Desconectado</div>
+            </div>
         </div>
         
-        <div class="controls">
+        <div class="controls-grid">
+            <button class="btn-add" onclick="addTime(5)">+5 minutos</button>
+            <button class="btn-add" onclick="addTime(10)">+10 minutos</button>
+            <button class="btn-add" onclick="addTime(30)">+30 minutos</button>
             <button class="btn-pause" onclick="pauseTimer()">⏸ Pausar</button>
             <button class="btn-resume" onclick="resumeTimer()">▶️ Reanudar</button>
         </div>
         
-        <div class="manual-add">
-            <div style="margin-bottom: 1em;">
+        <div class="manual-controls">
+            <h3>Control Manual</h3>
+            <div class="input-group">
                 <input type="number" id="customMinutes" placeholder="Minutos" min="1" max="999">
-                <button onclick="addCustomTime()">Añadir tiempo</button>
+                <button class="btn-add" onclick="addCustomTime()">Añadir Tiempo</button>
             </div>
-            <div>
-                <input type="number" id="setMinutes" placeholder="Establecer tiempo total" min="1" max="9999">
-                <button onclick="setTime()" style="background: #9C27B0;">Establecer timer</button>
+            <div class="input-group">
+                <input type="number" id="setMinutes" placeholder="Tiempo total" min="1" max="9999">
+                <button class="btn-set" onclick="setTime()">Establecer Timer</button>
             </div>
+        </div>
+        
+        <div class="overlay-links">
+            <h3>🎬 Enlace para OBS Studio</h3>
+            <div class="link-grid">
+                <a href="/overlay" target="_blank" class="overlay-link">
+                    <strong>⏱️ Timer Overlay</strong><br>
+                    Timer con efectos y animaciones
+                </a>
+            </div>
+            <p style="font-size: 0.9em; opacity: 0.8; margin-top: 1em;">
+                💡 Copia este enlace como "Browser Source" en OBS Studio
+            </p>
         </div>
     </div>
 
@@ -163,10 +469,7 @@ HTML_TEMPLATE = """
             if (isUpdating) return;
             
             fetch("/api/time")
-                .then(response => {
-                    if (!response.ok) throw new Error('Network error');
-                    return response.json();
-                })
+                .then(response => response.json())
                 .then(data => {
                     const timerElement = document.getElementById("timer");
                     const statusElement = document.getElementById("status");
@@ -175,12 +478,12 @@ HTML_TEMPLATE = """
                     
                     if (data.paused) {
                         timerElement.className = "paused";
-                        statusElement.textContent = "⏸ PAUSADO";
-                        statusElement.style.color = "#ff6b6b";
+                        statusElement.innerHTML = "⏸ <strong>PAUSADO</strong>";
+                        statusElement.style.color = "rgb(255, 107, 107)";
                     } else {
                         timerElement.className = "";
-                        statusElement.textContent = "▶️ EN VIVO";
-                        statusElement.style.color = "#4CAF50";
+                        statusElement.innerHTML = "▶️ <strong>EN VIVO</strong>";
+                        statusElement.style.color = "rgb(76, 175, 80)";
                     }
                 })
                 .catch(error => {
@@ -193,9 +496,9 @@ HTML_TEMPLATE = """
             fetch("/socket_status")
                 .then(response => response.json())
                 .then(data => {
-                    const statusElement = document.getElementById("socket-status");
+                    const statusElement = document.getElementById("socket-text");
                     if (data.connected > 0) {
-                        statusElement.textContent = `Conectado (${data.connected} canales)`;
+                        statusElement.textContent = "Conectado (" + data.connected + ")";
                         statusElement.className = "connected";
                     } else {
                         statusElement.textContent = "Desconectado";
@@ -203,7 +506,7 @@ HTML_TEMPLATE = """
                     }
                 })
                 .catch(error => {
-                    document.getElementById("socket-status").textContent = "Error";
+                    document.getElementById("socket-text").textContent = "Error";
                 });
         }
 
@@ -214,15 +517,8 @@ HTML_TEMPLATE = """
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ minutes: mins })
             })
-            .then(response => response.json())
-            .then(data => {
-                console.log(`Añadidos ${mins} minutos`);
-                fetchTime();
-            })
-            .catch(error => console.error('Error adding time:', error))
-            .finally(() => {
-                isUpdating = false;
-            });
+            .then(() => fetchTime())
+            .finally(() => isUpdating = false);
         }
 
         function addCustomTime() {
@@ -233,7 +529,7 @@ HTML_TEMPLATE = """
                 addTime(minutes);
                 input.value = "";
             } else {
-                alert("Por favor introduce un número válido de minutos");
+                alert("Por favor introduce un número válido");
             }
         }
 
@@ -248,67 +544,40 @@ HTML_TEMPLATE = """
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ minutes: minutes })
                 })
-                .then(response => response.json())
-                .then(data => {
-                    console.log(`Timer establecido a ${minutes} minutos`);
+                .then(() => {
                     fetchTime();
                     input.value = "";
                 })
-                .catch(error => console.error('Error setting time:', error))
-                .finally(() => {
-                    isUpdating = false;
-                });
-            } else {
-                alert("Por favor introduce un número válido de minutos");
+                .finally(() => isUpdating = false);
             }
         }
 
         function pauseTimer() {
             isUpdating = true;
             fetch("/pause", { method: "POST" })
-                .then(response => response.json())
-                .then(data => {
-                    console.log("Timer pausado");
-                    fetchTime();
-                })
-                .catch(error => console.error('Error pausing:', error))
-                .finally(() => {
-                    isUpdating = false;
-                });
+                .then(() => fetchTime())
+                .finally(() => isUpdating = false);
         }
 
         function resumeTimer() {
             isUpdating = true;
             fetch("/resume", { method: "POST" })
-                .then(response => response.json())
-                .then(data => {
-                    console.log("Timer reanudado");
-                    fetchTime();
-                })
-                .catch(error => console.error('Error resuming:', error))
-                .finally(() => {
-                    isUpdating = false;
-                });
+                .then(() => fetchTime())
+                .finally(() => isUpdating = false);
         }
 
-        // Permitir enter en los inputs
-        document.getElementById("customMinutes").addEventListener("keypress", function(event) {
-            if (event.key === "Enter") {
-                addCustomTime();
-            }
+        // Event listeners para Enter
+        document.getElementById("customMinutes").addEventListener("keypress", function(e) {
+            if (e.key === "Enter") addCustomTime();
         });
         
-        document.getElementById("setMinutes").addEventListener("keypress", function(event) {
-            if (event.key === "Enter") {
-                setTime();
-            }
+        document.getElementById("setMinutes").addEventListener("keypress", function(e) {
+            if (e.key === "Enter") setTime();
         });
 
-        // Actualizar cada segundo
+        // Actualizar datos
         setInterval(fetchTime, 1000);
         setInterval(checkSocketStatus, 5000);
-        
-        // Primera carga
         fetchTime();
         checkSocketStatus();
     </script>
@@ -317,7 +586,7 @@ HTML_TEMPLATE = """
 """
 
 # ================================
-# STREAMLABS SOCKET CLIENT INTEGRADO
+# STREAMLABS SOCKET CLIENT
 # ================================
 
 def setup_streamlabs_socket():
@@ -329,12 +598,11 @@ def setup_streamlabs_socket():
     connected_count = 0
     
     for channel, token in SOCKET_TOKENS.items():
-        if token.startswith("tu_socket_token_"):
+        if not token or token.startswith("tu_socket_token_"):
             print(f"⚠️ Token no configurado para {channel}")
             continue
             
         try:
-            # Crear cliente Socket.IO
             sio = socketio.Client()
             
             @sio.event
@@ -347,7 +615,6 @@ def setup_streamlabs_socket():
             
             @sio.event
             def event(data):
-                """Procesa eventos de Streamlabs"""
                 try:
                     event_type = data.get('type')
                     
@@ -355,13 +622,9 @@ def setup_streamlabs_socket():
                         process_streamlabs_donation(data, channel)
                     elif event_type == 'follow':
                         print(f"👥 [{channel}] FOLLOW: {data.get('message', [{}])[0].get('name', 'Anónimo')}")
-                    else:
-                        print(f"📝 [{channel}] Evento no procesado: {event_type}")
-                        
                 except Exception as e:
                     print(f"❌ Error procesando evento {channel}: {e}")
             
-            # Conectar
             url = f"https://sockets.streamlabs.com?token={token}"
             sio.connect(url)
             streamlabs_clients[channel] = sio
@@ -376,7 +639,7 @@ def setup_streamlabs_socket():
     return connected_count
 
 def process_streamlabs_donation(data, channel):
-    """Procesa donaciones de Streamlabs usando el timer compartido"""
+    """Procesa donaciones de Streamlabs"""
     try:
         messages = data.get('message', [])
         
@@ -386,7 +649,6 @@ def process_streamlabs_donation(data, channel):
             message = donation.get('message', '')
             currency = donation.get('currency', 'USD')
             
-            # Conversión de moneda simplificada
             if currency == 'EUR':
                 amount_eur = amount
             elif currency == 'USD':
@@ -394,26 +656,24 @@ def process_streamlabs_donation(data, channel):
             else:
                 amount_eur = amount
             
-            # 10 minutos por euro
             minutes = int(amount_eur * 10)
             
             print(f"💰 [{channel}] DONACIÓN Socket: {name} donó {amount} {currency} → +{minutes} min")
             if message:
                 print(f"   💬 Mensaje: {message}")
             
-            # ✅ USAR EL TIMER COMPARTIDO
             timer.add_time(minutes)
             
     except Exception as e:
         print(f"❌ Error procesando donación Socket {channel}: {e}")
 
-# ================================
-# RUTAS DE LA API
-# ================================
-
 @app.route("/")
 def index():
-    return render_template_string(HTML_TEMPLATE)
+    return render_template_string(MAIN_INTERFACE_TEMPLATE)
+
+@app.route("/overlay")
+def overlay():
+    return render_template_string(OVERLAY_TEMPLATE)
 
 @app.route("/api/time")
 def api_time():
@@ -427,7 +687,6 @@ def api_time():
             "status": "ok"
         })
     except Exception as e:
-        print(f"Error en /api/time: {e}")
         return jsonify({
             "time": "00:00:00",
             "paused": False,
@@ -436,7 +695,6 @@ def api_time():
 
 @app.route("/socket_status")
 def socket_status():
-    """Estado de conexiones Socket"""
     connected = len([c for c in streamlabs_clients.values() if c.connected])
     return jsonify({
         "connected": connected,
@@ -480,7 +738,6 @@ def pause():
         timer.pause()
         return jsonify({"status": "paused"})
     except Exception as e:
-        print(f"Error en /pause: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route("/resume", methods=["POST"])
@@ -489,16 +746,11 @@ def resume():
         timer.resume()
         return jsonify({"status": "resumed"})
     except Exception as e:
-        print(f"Error en /resume: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-# ================================
-# WEBHOOKS DE DONACIONES (BACKUP)
-# ================================
-
+# Webhooks
 @app.route("/webhook", methods=["POST"])
 def handle_donation():
-    """Webhook para donaciones - backup del Socket API"""
     try:
         data = request.json
         print("[DONACIÓN] Webhook recibido:")
@@ -518,26 +770,14 @@ def handle_donation():
         print(f"❌ Error procesando donación webhook: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-# ================================
-# EVENTOS DE TWITCH
-# ================================
-
 @app.route("/twitch", methods=["POST"])
 def twitch_webhook():
-    """Webhook para eventos de Twitch EventSub"""
     try:
-        raw_body = request.data.decode("utf-8")
-        headers = request.headers
-        
-        print("📡 Evento de Twitch recibido")
-        
         data = request.json
-        event_type = headers.get("Twitch-Eventsub-Message-Type")
+        event_type = request.headers.get("Twitch-Eventsub-Message-Type")
 
         if event_type == "webhook_callback_verification":
-            challenge = data.get("challenge", "")
-            print(f"✅ Verificación de webhook: {challenge}")
-            return challenge, 200
+            return data.get("challenge", ""), 200
 
         event = data.get("event", {})
         subscription_type = data.get("subscription", {}).get("type")
@@ -546,7 +786,6 @@ def twitch_webhook():
         if subscription_type == "channel.subscribe":
             print(f"[SUB] Nueva suscripción en {user}")
             timer.add_time(30)
-
         elif subscription_type == "channel.cheer":
             bits = int(event.get("bits", 0))
             minutos = (bits // 100) * 10
@@ -554,7 +793,6 @@ def twitch_webhook():
             timer.add_time(minutos)
 
         return jsonify({"status": "ok"}), 200
-        
     except Exception as e:
         print(f"❌ Error procesando evento de Twitch: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
@@ -576,19 +814,18 @@ def health():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == "__main__":
-    print("🚀 Iniciando servidor consolidado con Socket API...")
+    print("🚀 Iniciando servidor con overlays integrados...")
     
-    # Configurar Socket API en hilo separado
     def start_socket_api():
-        time.sleep(2)  # Esperar a que Flask se inicie
+        time.sleep(2)
         setup_streamlabs_socket()
     
     socket_thread = threading.Thread(target=start_socket_api, daemon=True)
     socket_thread.start()
     
-    print("🌐 Interfaz web: http://localhost:5000")
-    print("💰 Webhook donaciones: http://localhost:5000/webhook") 
+    print("🌐 Interfaz principal: http://localhost:5000")
+    print("⏱️  Overlay timer: http://localhost:5000/overlay")
+    print("💰 Webhook donaciones: http://localhost:5000/webhook")
     print("🎮 Webhook Twitch: http://localhost:5000/twitch")
-    print("📊 Estado: http://localhost:5000/health")
     
     app.run(host="0.0.0.0", port=5000, debug=False)
