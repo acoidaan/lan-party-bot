@@ -128,8 +128,14 @@ HTML_TEMPLATE = """
         </div>
         
         <div class="manual-add">
-            <input type="number" id="customMinutes" placeholder="Minutos" min="1" max="999">
-            <button onclick="addCustomTime()">Añadir tiempo</button>
+            <div style="margin-bottom: 1em;">
+                <input type="number" id="customMinutes" placeholder="Minutos" min="1" max="999">
+                <button onclick="addCustomTime()">Añadir tiempo</button>
+            </div>
+            <div>
+                <input type="number" id="setMinutes" placeholder="Establecer tiempo total" min="1" max="9999">
+                <button onclick="setTime()" style="background: #9C27B0;">Establecer timer</button>
+            </div>
         </div>
 
         <div class="endpoints-info">
@@ -205,6 +211,32 @@ HTML_TEMPLATE = """
             }
         }
 
+        function setTime() {
+            const input = document.getElementById("setMinutes");
+            const minutes = parseInt(input.value);
+            
+            if (minutes && minutes > 0) {
+                isUpdating = true;
+                fetch("/set_time", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ minutes: minutes })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log(`Timer establecido a ${minutes} minutos`);
+                    fetchTime();
+                    input.value = "";
+                })
+                .catch(error => console.error('Error setting time:', error))
+                .finally(() => {
+                    isUpdating = false;
+                });
+            } else {
+                alert("Por favor introduce un número válido de minutos");
+            }
+        }
+
         function pauseTimer() {
             isUpdating = true;
             fetch("/pause", { method: "POST" })
@@ -233,10 +265,16 @@ HTML_TEMPLATE = """
                 });
         }
 
-        // Permitir enter en el input de minutos
+        // Permitir enter en los inputs
         document.getElementById("customMinutes").addEventListener("keypress", function(event) {
             if (event.key === "Enter") {
                 addCustomTime();
+            }
+        });
+        
+        document.getElementById("setMinutes").addEventListener("keypress", function(event) {
+            if (event.key === "Enter") {
+                setTime();
             }
         });
 
@@ -281,7 +319,8 @@ def index():
 def api_time():
     try:
         remaining = timer.get_remaining()
-        time_str = str(remaining).split('.')[0]
+        # ✅ USAR EL MÉTODO DE FORMATO DEL TIMER
+        time_str = timer.format_time(remaining)
         
         return jsonify({
             "time": time_str,
@@ -309,6 +348,21 @@ def add_time():
         return jsonify({"status": "ok", "added": minutes})
     except Exception as e:
         print(f"Error en /add_time: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route("/set_time", methods=["POST"])
+def set_time():
+    try:
+        data = request.get_json()
+        minutes = data.get("minutes", 0)
+        
+        if minutes <= 0:
+            return jsonify({"status": "error", "message": "Minutes must be positive"}), 400
+            
+        timer.set_time(minutes)
+        return jsonify({"status": "ok", "set_to": minutes})
+    except Exception as e:
+        print(f"Error en /set_time: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route("/pause", methods=["POST"])
@@ -367,11 +421,6 @@ def twitch_webhook():
         raw_body = request.data.decode("utf-8")
         headers = request.headers
         
-        # En producción, descomenta esto para verificar la firma:
-        # if not verify_twitch_signature(headers, raw_body):
-        #     print("❌ Firma de Twitch inválida")
-        #     return "Unauthorized", 401
-
         print("📡 Evento de Twitch recibido")
         
         data = request.json
@@ -432,9 +481,6 @@ def auth_callback():
     if not code:
         return "Error: No se recibió código de autorización", 400
     
-    # Aquí procesarías el código para obtener tokens
-    # (código del auth_server.py original)
-    
     return "Autorización completada. Puedes cerrar esta pestaña."
 
 # ================================
@@ -444,35 +490,56 @@ def auth_callback():
 @app.route("/health")
 def health():
     """Endpoint para verificar estado del sistema"""
-    return jsonify({
-        "status": "ok",
-        "timer_running": True,
-        "current_time": str(timer.get_remaining()).split('.')[0],
-        "is_paused": timer.is_paused(),
-        "endpoints": {
-            "web_interface": "/",
-            "donations": "/webhook",
-            "twitch_events": "/twitch",
-            "twitch_auth": "/auth",
-            "api_time": "/api/time"
-        }
-    })
+    try:
+        remaining = timer.get_remaining()
+        time_str = timer.format_time(remaining)
+        
+        return jsonify({
+            "status": "ok",
+            "timer_running": True,
+            "current_time": time_str,
+            "is_paused": timer.is_paused(),
+            "endpoints": {
+                "web_interface": "/",
+                "donations": "/webhook",
+                "twitch_events": "/twitch",
+                "twitch_auth": "/auth",
+                "api_time": "/api/time",
+                "add_time": "/add_time",
+                "set_time": "/set_time"
+            }
+        })
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
 
 @app.route("/test")
 def test_endpoints():
     """Endpoint para testear que todo funciona"""
-    return jsonify({
-        "message": "¡Todos los servicios están funcionando!",
-        "timer": str(timer.get_remaining()).split('.')[0],
-        "paused": timer.is_paused(),
-        "available_endpoints": [
-            "/ - Interfaz web",
-            "/webhook - Donaciones", 
-            "/twitch - Eventos Twitch",
-            "/health - Estado del sistema",
-            "/api/time - API del timer"
-        ]
-    })
+    try:
+        remaining = timer.get_remaining()
+        time_str = timer.format_time(remaining)
+        
+        return jsonify({
+            "message": "¡Todos los servicios están funcionando!",
+            "timer": time_str,
+            "paused": timer.is_paused(),
+            "available_endpoints": [
+                "/ - Interfaz web",
+                "/webhook - Donaciones", 
+                "/twitch - Eventos Twitch",
+                "/health - Estado del sistema",
+                "/api/time - API del timer",
+                "/add_time - Añadir tiempo",
+                "/set_time - Establecer tiempo"
+            ]
+        })
+    except Exception as e:
+        return jsonify({
+            "error": str(e)
+        }), 500
 
 if __name__ == "__main__":
     print("🚀 Iniciando servidor consolidado en puerto 5000...")
