@@ -1,92 +1,89 @@
-from flask import Flask, request
+from flask import Flask, jsonify, request, render_template_string, redirect, url_for
 from timer_instance import timer
-import json
-import hmac
-import hashlib
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
-
-TWITCH_SECRET = os.getenv("TWITCH_EVENTSUB_SECRET", "defaultsecret")
 
 app = Flask(__name__)
 
-# ======================================
-# 🟡 DONACIONES - /webhook/donations
-# ======================================
-@app.route("/webhook/donations", methods=["POST"])
-def handle_donation():
-    data = request.json
-    print("[DONACIÓN] Payload recibido:")
-    print(json.dumps(data, indent=2))
+HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Subathon Timer</title>
+    <meta charset="UTF-8" />
+    <style>
+        body { background: #111; color: white; text-align: center; font-family: sans-serif; }
+        h1 { font-size: 5em; margin-top: 1em; }
+        button {
+            background: #333; color: white; padding: 1em; margin: 0.5em;
+            border: none; border-radius: 5px; font-size: 1em;
+        }
+        button:hover { background: #555; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1 id="timer">00:00:00</h1>
+    <div>
+        <button onclick="addTime(5)">+5 min</button>
+        <button onclick="addTime(10)">+10 min</button>
+        <button onclick="pause()">⏸ Pausar</button>
+        <button onclick="resume()">▶️ Reanudar</button>
+    </div>
+    <script>
+        function fetchTime() {
+            fetch("/api/time")
+                .then(response => response.json())
+                .then(data => {
+                    const label = data.paused ? "PAUSADO - " : "";
+                    document.getElementById("timer").textContent = label + data.time;
+                });
+        }
 
-    try:
-        messages = data.get("message", [])
-        for donation in messages:
-            amount = float(donation.get("amount", 0))
-            user = donation.get("from", "Anon")
-            minutos = int(amount * 10)
-            timer.add_time(minutos)
-            print(f"✅ {user} donó {amount}€ → +{minutos} minutos")
-    except Exception as e:
-        print("❌ Error en donación:", e)
+        function addTime(mins) {
+            fetch("/add_time", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ minutes: mins })
+            }).then(fetchTime);
+        }
 
-    return "OK", 200
+        function pause() {
+            fetch("/pause", { method: "POST" }).then(fetchTime);
+        }
 
-# ======================================
-# 🟣 TWITCH EVENTSUB - /webhook/twitch
-# ======================================
-def verify_signature(headers, body):
-    message_id = headers.get("Twitch-Eventsub-Message-Id")
-    timestamp = headers.get("Twitch-Eventsub-Message-Timestamp")
-    signature = headers.get("Twitch-Eventsub-Message-Signature")
+        function resume() {
+            fetch("/resume", { method: "POST" }).then(fetchTime);
+        }
 
-    hmac_message = message_id + timestamp + body
-    expected_signature = "sha256=" + hmac.new(
-        TWITCH_SECRET.encode("utf-8"),
-        hmac_message.encode("utf-8"),
-        hashlib.sha256
-    ).hexdigest()
+        setInterval(fetchTime, 1000);
+        fetchTime();
+    </script>
+</body>
+</html>
+"""
 
-    return hmac.compare_digest(signature, expected_signature)
+@app.route("/")
+def index():
+    return render_template_string(HTML_TEMPLATE)
 
-@app.route("/webhook/twitch", methods=["POST"])
-def twitch_webhook():
-    raw_body = request.data.decode("utf-8")
-    headers = request.headers
+@app.route("/api/time")
+def api_time():
+    return jsonify({
+        "time": str(timer.get_remaining()).split('.')[0],
+        "paused": timer.is_paused()
+    })
 
-    if not verify_signature(headers, raw_body):
-        print("⚠️ Firma inválida de Twitch")
-        return "Invalid signature", 403
+@app.route("/add_time", methods=["POST"])
+def add_time():
+    data = request.get_json()
+    minutes = data.get("minutes", 0)
+    timer.add_time(minutes)
+    return jsonify({"status": "ok"})
 
-    data = request.json
-    event_type = headers.get("Twitch-Eventsub-Message-Type")
+@app.route("/pause", methods=["POST"])
+def pause():
+    timer.pause()
+    return jsonify({"status": "paused"})
 
-    if event_type == "webhook_callback_verification":
-        return data["challenge"], 200
-
-    event = data.get("event", {})
-    subscription_type = data.get("subscription", {}).get("type")
-    user = event.get("broadcaster_user_name", "desconocido")
-
-    if subscription_type == "channel.subscribe":
-        print(f"📥 Sub en {user} → +30 minutos")
-        timer.add_time(30)
-
-    elif subscription_type == "channel.cheer":
-        bits = int(event.get("bits", 0))
-        minutos = (bits // 100) * 10
-        print(f"📥 {bits} bits en {user} → +{minutos} minutos")
-        timer.add_time(minutos)
-
-    return "OK", 200
-
-@app.route("/overlay.txt")
-def serve_timer_file():
-    try:
-        with open("overlay_timer.txt", "r") as f:
-            content = f.read()
-        return content, 200, {'Content-Type': 'text/plain'}
-    except Exception as e:
-        return f"Error: {e}", 500
+@app.route("/resume", methods=["POST"])
+def resume():
+    timer.resume()
+    return jsonify({"status": "resumed"})

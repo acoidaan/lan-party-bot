@@ -41,9 +41,11 @@ while True:
 
     elif command == "pause":
         timer.pause()
+        print("Contador pausado.")
 
     elif command == "resume":
         timer.resume()
+        print("Contador reanudado.")
 
     elif command == "show":
         print("⏱ Tiempo restante:", str(timer.get_remaining()).split(".")[0])

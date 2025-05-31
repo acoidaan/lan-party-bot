@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Subathon Timer</title>
+    <style>
+        body { font-family: sans-serif; background: #111; color: white; text-align: center; margin-top: 50px; }
+        h1 { font-size: 5em; }
+        .btn {
+            padding: 10px 20px;
+            background: #333;
+            color: white;
+            margin: 10px;
+            border-radius: 5px;
+            text-decoration: none;
+        }
+        .btn:hover { background: #555; }
+    </style>
+</head>
+<body>
+    <h1 id="timer">Cargando...</h1>
+    <a href="/add/5" class="btn">+5 min</a>
+    <a href="/add/10" class="btn">+10 min</a>
+    <a href="/pause" class="btn">⏸ Pausar</a>
+    <a href="/resume" class="btn">▶️ Reanudar</a>
+
+    <script>
+        function updateTimer() {
+            fetch('/api/time')
+                .then(res => res.text())
+                .then(data => {
+                    document.getElementById('timer').innerText = data;
+                });
+        }
+        setInterval(updateTimer, 1000);
+        updateTimer();
+    </script>
+</body>
+</html>
