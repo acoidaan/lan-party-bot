@@ -10,6 +10,7 @@ class SubathonTimer:
         self.end_time = datetime.now() + timedelta(minutes=initial_minutes)
         self._paused = False
         self._paused_delta = timedelta()
+        self._should_stop = False
         self._start_auto_update()
 
     def add_time(self, minutes):
@@ -19,19 +20,22 @@ class SubathonTimer:
             else:
                 self.end_time += timedelta(minutes=minutes)
             print(f"[TIMER] +{minutes} min")
-            self.save_to_file()
+            self._update_file_now()
 
     def get_remaining(self):
         with self.lock:
-            return self._paused_delta if self._paused else max(self.end_time - datetime.now(), timedelta(seconds=0))
+            if self._paused:
+                return max(self._paused_delta, timedelta(seconds=0))
+            else:
+                return max(self.end_time - datetime.now(), timedelta(seconds=0))
 
     def pause(self):
         with self.lock:
             if not self._paused:
-                self._paused_delta = self.end_time - datetime.now()
+                self._paused_delta = max(self.end_time - datetime.now(), timedelta(seconds=0))
                 self._paused = True
                 print("⏸ Pausado.")
-                self.save_to_file()
+                self._update_file_now()
 
     def resume(self):
         with self.lock:
@@ -40,31 +44,47 @@ class SubathonTimer:
                 self._paused = False
                 self._paused_delta = timedelta()
                 print("▶️ Reanudado.")
-                self.save_to_file()
+                self._update_file_now()
 
     def is_paused(self):
-        return self._paused
+        with self.lock:
+            return self._paused
+
+    def _update_file_now(self):
+        """Actualiza el archivo inmediatamente (llamada interna)"""
+        if self._paused:
+            remaining = self._paused_delta
+            display = f"PAUSADO - {str(remaining).split('.')[0]}"
+        else:
+            remaining = max(self.end_time - datetime.now(), timedelta(seconds=0))
+            display = str(remaining).split('.')[0]
+
+        # Escritura atómica para evitar errores en OBS
+        temp_path = self.overlay_path + ".tmp"
+        with open(temp_path, "w", encoding='utf-8') as f:
+            f.write(display)
+        os.replace(temp_path, self.overlay_path)
 
     def save_to_file(self):
+        """Método público para forzar actualización"""
         with self.lock:
-            if self._paused:
-                display = f"PAUSADO - {str(self._paused_delta).split('.')[0]}"
-            else:
-                remaining = self.end_time - datetime.now()
-                display = str(max(remaining, timedelta())).split('.')[0]
-
-            # Escritura atómica para evitar errores en OBS
-            temp_path = self.overlay_path + ".tmp"
-            with open(temp_path, "w") as f:
-                f.write(display)
-            os.replace(temp_path, self.overlay_path)
+            self._update_file_now()
 
     def _start_auto_update(self):
         def update_loop():
-            while True:
-                self.save_to_file()
+            while not self._should_stop:
+                with self.lock:
+                    # Solo actualizar si NO está pausado
+                    if not self._paused:
+                        self._update_file_now()
                 time.sleep(1)
+        
         t = threading.Thread(target=update_loop, daemon=True)
         t.start()
 
+    def stop(self):
+        """Para el timer completamente"""
+        self._should_stop = True
+
+# Instancia global del timer
 timer = SubathonTimer()

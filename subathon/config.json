@@ -1,5 +1,19 @@
 {
   "channels": ["xstellar_", "andresmanueh"],
   "overlay_path": "overlay_timer.txt",
-  "webhook_port": 5001
+  "ports": {
+    "main_web": 5000,
+    "donations_webhook": 5001,
+    "twitch_events": 5002,
+    "auth_server": 5003
+  },
+  "timer_settings": {
+    "initial_minutes": 60,
+    "auto_save_interval": 1
+  },
+  "ngrok": {
+    "enabled": true,
+    "web_url": "https://tu-dominio.ngrok.io",
+    "webhook_url": "https://tu-dominio.ngrok.io/webhook"
+  }
 }
