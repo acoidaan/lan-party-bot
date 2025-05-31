@@ -1,6 +1,7 @@
 import os
 import sys
 import subprocess
+import time
 
 # Añadir carpeta raíz al path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -43,6 +44,18 @@ def quick_start():
     
     server_thread = threading.Thread(target=run_server, daemon=True)
     server_thread.start()
+
+    # Añadir después de server_thread.start():
+    print("🔍 Iniciando sockets Streamlabs...")
+    from core.webhooks import setup_streamlabs_socket
+    import threading
+
+    def start_sockets():
+        time.sleep(2)
+        setup_streamlabs_socket()
+
+    socket_thread = threading.Thread(target=start_sockets, daemon=True)
+    socket_thread.start()
     
     # Consola básica
     while True:

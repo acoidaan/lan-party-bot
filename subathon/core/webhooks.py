@@ -1178,6 +1178,7 @@ STATS_DASHBOARD_TEMPLATE = """
 # ================================
 
 def setup_streamlabs_socket():
+    print("🔍 DEBUG: setup_streamlabs_socket() iniciado")
     """Configura clientes Socket de Streamlabs integrados"""
     if not SOCKETIO_AVAILABLE:
         print("⚠️ python-socketio no está instalado. Socket API deshabilitado.")

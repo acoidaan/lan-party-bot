@@ -3,7 +3,10 @@ import json
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+load_dotenv("config/.env")
 
 TWITCH_CLIENT_ID = os.getenv("TWITCH_CLIENT_ID")
 TWITCH_SECRET = os.getenv("TWITCH_CLIENT_SECRET")

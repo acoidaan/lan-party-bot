@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 import os
 import json
 
-load_dotenv()
+load_dotenv("config/.env")
 
 CLIENT_ID = os.getenv("TWITCH_CLIENT_ID")
 CLIENT_SECRET = os.getenv("TWITCH_CLIENT_SECRET")
