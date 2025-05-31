@@ -1,4 +1,3 @@
-# stats_tracker.py - Sistema de estadísticas completo
 import json
 import time
 from datetime import datetime, timedelta

@@ -1,9 +1,10 @@
-#!/usr/bin/env python3
-# streamlabs_socket.py - Cliente Socket API según documentación oficial
-
 import socketio
 import json
-from timer_instance import timer
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from core.timer_instance import timer
 
 # Tokens de Socket API (necesitas obtenerlos)
 SOCKET_TOKENS = {

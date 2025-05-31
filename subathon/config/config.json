@@ -1,0 +1,8 @@
+{
+  "channels": ["xstellar_", "andresmanueh"],
+  "overlay_path": "output/overlay_timer.txt",
+  "timer_settings": {
+    "initial_minutes": 60,
+    "auto_save_interval": 1
+  }
+}

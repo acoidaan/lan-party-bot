@@ -1,10 +1,11 @@
-# webhooks_enhanced_with_stats.py - Sistema completo con estadísticas
 from flask import Flask, jsonify, request, render_template_string
-from timer_instance import timer
+from core.timer_instance import timer
 import json
 import hmac
 import hashlib
+import sys
 import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import threading
 import time
 from datetime import datetime, timedelta
@@ -18,7 +19,7 @@ try:
 except ImportError:
     SOCKETIO_AVAILABLE = False
 
-load_dotenv()
+load_dotenv("config/.env")
 
 app = Flask(__name__)
 
@@ -32,6 +33,7 @@ SOCKET_TOKENS = {
 }
 
 # Cliente Socket global
+print(f"Tokens Streamlabs: {SOCKET_TOKENS}")
 streamlabs_clients = {}
 
 # ================================
@@ -228,8 +230,6 @@ class StatsTracker:
             
             return all_events[:limit]
 
-# Instancia global del tracker
-stats_tracker = StatsTracker()
 
 # Template del overlay (mismo de antes, sin cambios)
 OVERLAY_TEMPLATE = """
@@ -1202,6 +1202,10 @@ def setup_streamlabs_socket():
                 print(f"🔌 Socket desconectado - {channel}")
             
             @sio.event
+            def connect_error(data):
+                print(f"❌ Error de conexión Socket {channel}: {data}")
+            
+            @sio.event
             def event(data):
                 try:
                     event_type = data.get('type')
@@ -1214,6 +1218,7 @@ def setup_streamlabs_socket():
                     print(f"❌ Error procesando evento {channel}: {e}")
             
             url = f"https://sockets.streamlabs.com?token={token}"
+            print(f"Intentando conectar a: {url[:50]}..")
             sio.connect(url)
             streamlabs_clients[channel] = sio
             connected_count += 1
@@ -1258,6 +1263,9 @@ def process_streamlabs_donation(data, channel):
             
     except Exception as e:
         print(f"❌ Error procesando donación Socket {channel}: {e}")
+
+stats_tracker = StatsTracker()
+
 
 # ================================
 # RUTAS DE LA API
@@ -1483,3 +1491,4 @@ if __name__ == "__main__":
     print("🎮 Webhook Twitch: http://localhost:5000/twitch")
     
     app.run(host="0.0.0.0", port=5000, debug=False)
+
