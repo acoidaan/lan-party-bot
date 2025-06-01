@@ -36,7 +36,7 @@ pip install -r requirements.txt
 
 1. Ve a [Twitch Developer Console](https://dev.twitch.tv/console)
 2. Crea una nueva aplicación
-3. **OAuth Redirect URL**: `http://localhost:5000/callback`
+3. **OAuth Redirect URL**: `https://TU-URL-NGROK.ngrok-free.app/callback`
 4. Guarda tu Client ID y Client Secret
 
 ### 2. Crear archivo .env
@@ -67,42 +67,37 @@ Reemplaza `TU-URL-NGROK` en el archivo `.env` con tu URL de ngrok.
 
 ```bash
 # Servidor principal (interfaz web + webhooks)
-python webhooks.py
+python3 scripts/start.py
 
-# Consola de comandos (opcional)
-python bot.py
+# Servidor con consola de comandos (opcional)
+python3 scripts/main.py
+
+# Ejecutar el setup 
+python3 scripts/setup.py
+
+# Mostrar información del sistema
+python3 scripts/info.py
 ```
 
 ### Interfaz web
 
-Abre tu URL de ngrok en el navegador para acceder al panel de control.
-
-### Comandos de consola (si usas bot.py)
-
-```bash
-add 15      # Añadir 15 minutos
-set 120     # Establecer timer a 120 minutos
-pause       # Pausar contador
-resume      # Reanudar contador
-show        # Mostrar tiempo restante
-help        # Mostrar ayuda
-```
+Abre tu URL de ngrok en el navegador para acceder al panel de control, o bien,
+puedes usar la IP si estás en una red local, con el puerto 5000.
 
 ## Configuración OBS
 
-1. **Fuente** → **Texto (GDI+)**
-2. **Leer desde archivo** → Activar
-3. **Archivo de texto** → Seleccionar `overlay_timer.txt`
-4. **Fuente** → Monospace, tamaño grande
+1. **Fuente** → **Navegador**
+2. **Poner de URL**: `https://TU-URL-NGROK.ngrok-free.app`
 
 ## URLs para servicios externos
 
 Con tu URL de ngrok (`https://xxxx.ngrok-free.app`):
 
 - **🌐 Panel de control**: `https://xxxx.ngrok-free.app`
+- **⏳ Overlay del contador**: `https://xxxx.ngrok-free.app/overlay`
+- **📊 Estadísticas del stream**: `https://xxx.ngrok-free.app/stats`
 - **💰 Streamlabs webhook**: `https://xxxx.ngrok-free.app/webhook`
 - **🎮 Twitch EventSub**: `https://xxxx.ngrok-free.app/twitch`
-- **📊 Estado del sistema**: `https://xxxx.ngrok-free.app/health`
 
 ## API Testing
 
@@ -179,14 +174,25 @@ python webhooks.py
 
 ```plaintext
 subathon/
-├── webhooks.py              # Servidor principal (TODO EN UNO)
-├── timer_instance.py        # Timer singleton
-├── bot.py                   # Consola de comandos (opcional)
-├── requirements.txt         # Dependencias Python
-├── .env                     # Configuración (crear manualmente)
-├── config.json             # Configuración general
-├── overlay_timer.txt       # Archivo para OBS
-└── twitch_auth.json        # Tokens (se genera automáticamente)
+├── scripts/                 # Puntos de entrada
+│   ├── start.py            # Inicio rápido
+│   ├── main.py             # Menú completo  
+│   ├── setup.py            # Configuración inicial
+│   └── info.py             # Información del sistema
+├── core/                   # Sistema principal
+│   ├── webhooks.py         # Servidor principal (TODO EN UNO)
+│   ├── timer.py            # Lógica del timer
+│   └── timer_instance.py   # Timer singleton
+├── twitch/                 # Integración Twitch
+├── external/               # Servicios externos
+├── analytics/              # Sistema de estadísticas
+├── config/                 # Configuración
+│   ├── .env                # Variables de entorno
+│   ├── config.json         # Configuración general
+│   └── twitch_auth.json    # Tokens (se genera automáticamente)
+├── output/                 # Archivos de salida
+│   └── overlay_timer.txt   # Archivo para OBS
+└── requirements.txt        # Dependencias Python
 ```
 
 ## Autor
@@ -197,12 +203,7 @@ subathon/
 
 Puedes encontrarnos en:
 
-- Comunidad de [Discord](https://discord.com/invite/3GB9PuJ4G4).
-- Twitch [andresmanueh](https://twitch.tv/andresmanueh).
-- Twitch [xstellar_](https://twitch.tv/xstellar_).
-- Instagram: [@calceliga](https://instagram.com/calceliga)
-- TikTok: [@calce_team_](https://www.tiktok.com/@calce_team_?_t=ZN-8wnPf5P441u&_r=1)
-- X: [@calceteam0](https://x.com/calceteam0)
+- Todas las redes sociales de CalceTeam en este [link](https://linktr.ee/calceteam_).
 
 ---
 
@@ -237,21 +238,18 @@ Crear archivo `.env` con las credenciales de Twitch y URL de ngrok.
 ### Paso 5: Ejecutar
 
 ```bash
-python webhooks.py
+python3 scripts/start.py
 ```
 
 ### Paso 6: Verificar
 
 - Abrir URL de ngrok en navegador
-- Configurar OBS con archivo `overlay_timer.txt`
 - Testear con curl o interfaz web
 
 ### Paso 7: Configurar servicios
 
 - **Streamlabs**: URL webhook
 - **Twitch**: Registrar EventSub webhooks
-
-</details>
 
 ---
 
