@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Quiz Overlay</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: transparent;
+            font-family: 'Arial', sans-serif;
+            color: white;
+            overflow: hidden;
+        }
+
+        .quiz-container {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            opacity: 0;
+            transform: translateY(50px);
+            transition: all 0.8s ease;
+        }
+
+        .quiz-container.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .question {
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
+            line-height: 1.3;
+            background: linear-gradient(135deg, #5B88A5, #243A69);
+            border-radius: 15px;
+            padding: 20px;
+            border: 2px solid #F4F4F2;
+        }
+
+        .options-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .option {
+            background: linear-gradient(135deg, #191013, #243A69);
+            border: 2px solid #D4CDC5;
+            border-radius: 15px;
+            padding: 20px;
+            font-size: 18px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+
+        .option:before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .option:hover:before {
+            left: 100%;
+        }
+
+        .option.correct {
+            background: linear-gradient(135deg, #5B88A5, #243A69);
+            border-color: #F4F4F2;
+            animation: correctPulse 1s ease-in-out;
+        }
+
+        .option.eliminated {
+            background: linear-gradient(135deg, #D4CDC5, #191013);
+            opacity: 0.4;
+            text-decoration: line-through;
+        }
+
+        @keyframes correctPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .option-letter {
+            display: inline-block;
+            background: #F4F4F2;
+            color: #191013;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            line-height: 30px;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        .lifelines {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .lifeline {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #D4CDC5, #F4F4F2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            border: 3px solid #243A69;
+            transition: all 0.3s ease;
+            color: #191013;
+        }
+
+        .lifeline.used {
+            background: linear-gradient(135deg, #191013, #243A69);
+            opacity: 0.5;
+            color: #D4CDC5;
+        }
+
+        .score {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: linear-gradient(135deg, #243A69, #5B88A5);
+            padding: 15px 25px;
+            border-radius: 25px;
+            font-size: 20px;
+            font-weight: bold;
+            border: 3px solid #F4F4F2;
+        }
+
+        .question-counter {
+            position: absolute;
+            top: 90px;
+            left: 20px;
+            background: linear-gradient(135deg, #D4CDC5, #F4F4F2);
+            color: #191013;
+            padding: 15px 25px;
+            border-radius: 25px;
+            font-size: 18px;
+            font-weight: bold;
+            border: 3px solid #243A69;
+        }
+
+        .audience-poll {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.9);
+            padding: 30px;
+            border-radius: 20px;
+            border: 3px solid #ffd700;
+            display: none;
+        }
+
+        .audience-poll.visible {
+            display: block;
+        }
+
+        .poll-bars {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .poll-bar {
+            background: #333;
+            height: 40px;
+            border-radius: 20px;
+            overflow: hidden;
+            position: relative;
+            border: 2px solid #666;
+        }
+
+        .poll-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3498db, #2980b9);
+            width: 0%;
+            transition: width 2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+
+        .phone-call {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.9);
+            padding: 40px;
+            border-radius: 20px;
+            border: 3px solid #ffd700;
+            text-align: center;
+            display: none;
+        }
+
+        .phone-call.visible {
+            display: block;
+        }
+
+        .phone-icon {
+            font-size: 60px;
+            margin-bottom: 20px;
+            animation: ring 1s infinite;
+        }
+
+        @keyframes ring {
+            0%, 50%, 100% { transform: rotate(0deg); }
+            25% { transform: rotate(-10deg); }
+            75% { transform: rotate(10deg); }
+        }
+
+        .lifeline-notification {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: linear-gradient(135deg, #D4CDC5, #F4F4F2);
+            color: #191013;
+            padding: 30px 50px;
+            border-radius: 20px;
+            font-size: 24px;
+            font-weight: bold;
+            border: 3px solid #243A69;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            z-index: 1000;
+            opacity: 0;
+            transform: translate(-50%, -50%) scale(0.5);
+            transition: all 0.5s ease;
+        }
+
+        .lifeline-notification.show {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+        }
+    </style>
+</head>
+<body>
+    <div class="score">
+        <span id="scoreText">Puntuación: 0</span>
+    </div>
+
+    <div class="question-counter">
+        <span id="questionCounter">Pregunta: 0/15</span>
+    </div>
+
+    <div class="lifelines">
+        <div class="lifeline" id="lifeline-50-50" title="50/50">
+            <span>½</span>
+        </div>
+        <div class="lifeline" id="lifeline-phone" title="Llamada">
+            <span>📞</span>
+        </div>
+        <div class="lifeline" id="lifeline-audience" title="Público">
+            <span>👥</span>
+        </div>
+    </div>
+
+    <div class="quiz-container" id="quizContainer">
+        <div class="question" id="questionText"></div>
+        <div class="options-grid" id="optionsGrid">
+            <div class="option" data-index="0">
+                <span class="option-letter">A</span>
+                <span class="option-text"></span>
+            </div>
+            <div class="option" data-index="1">
+                <span class="option-letter">B</span>
+                <span class="option-text"></span>
+            </div>
+            <div class="option" data-index="2">
+                <span class="option-letter">C</span>
+                <span class="option-text"></span>
+            </div>
+            <div class="option" data-index="3">
+                <span class="option-letter">D</span>
+                <span class="option-text"></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="audience-poll" id="audiencePoll">
+        <h3 style="text-align: center; margin-top: 0;">Votación del Público</h3>
+        <div class="poll-bars">
+            <div class="poll-bar">
+                <div class="poll-fill" data-option="0">A: 0%</div>
+            </div>
+            <div class="poll-bar">
+                <div class="poll-fill" data-option="1">B: 0%</div>
+            </div>
+            <div class="poll-bar">
+                <div class="poll-fill" data-option="2">C: 0%</div>
+            </div>
+            <div class="poll-bar">
+                <div class="poll-fill" data-option="3">D: 0%</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="phone-call" id="phoneCall">
+        <div class="phone-icon">📞</div>
+        <h3>Llamando a un amigo...</h3>
+        <p id="phoneAdvice"></p>
+    </div>
+
+    <div class="lifeline-notification" id="lifeline-notification">
+        <span id="notification-text"></span>
+    </div>
+
+    <script>
+        let gameState = null;
+        let audiencePollVisible = false;
+        let phoneCallVisible = false;
+
+        function updateGame() {
+            fetch('/api/game-state')
+                .then(response => response.json())
+                .then(data => {
+                    gameState = data;
+                    updateDisplay();
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        function updateDisplay() {
+            if (!gameState) return;
+
+            // Actualizar puntuación
+            document.getElementById('scoreText').textContent = `Puntuación: ${gameState.score}`;
+
+            // Actualizar contador de preguntas
+            document.getElementById('questionCounter').textContent = `Pregunta: ${gameState.question_count}/${gameState.max_questions}`;
+
+            // Actualizar comodines
+            Object.keys(gameState.lifelines).forEach(lifeline => {
+                const element = document.getElementById(`lifeline-${lifeline.replace('_', '-')}`);
+                if (element) {
+                    element.classList.toggle('used', gameState.lifelines[lifeline]);
+                }
+            });
+
+            // Mostrar/ocultar contenedor
+            const container = document.getElementById('quizContainer');
+            const shouldShow = gameState.question_visible || gameState.options_visible;
+            container.classList.toggle('visible', shouldShow);
+
+            // Actualizar pregunta
+            document.getElementById('questionText').textContent = gameState.question;
+
+            // Actualizar opciones
+            const options = document.querySelectorAll('.option');
+            options.forEach((option, index) => {
+                const textElement = option.querySelector('.option-text');
+                textElement.textContent = gameState.options[index];
+                
+                option.classList.toggle('eliminated', gameState.eliminated_options.includes(index));
+                option.classList.toggle('correct', 
+                    gameState.answer_revealed && index === gameState.correct_answer);
+                
+                option.style.visibility = gameState.options[index] ? 'visible' : 'hidden';
+            });
+        }
+
+        function showLifelineNotification(text) {
+            const notification = document.getElementById('lifeline-notification');
+            const textElement = document.getElementById('notification-text');
+            
+            textElement.textContent = text;
+            notification.classList.add('show');
+            
+            // Limpiar cualquier timeout previo
+            if (window.notificationTimeout) {
+                clearTimeout(window.notificationTimeout);
+            }
+            
+            // Nuevo timeout para ocultar
+            window.notificationTimeout = setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+
+        // Actualizar cada segundo
+        setInterval(updateGame, 1000);
+        updateGame();
+
+        // Escuchar eventos especiales
+        let eventSource = new EventSource('/api/events');
+        eventSource.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            
+            if (data.type === 'lifeline_used') {
+                showLifelineNotification(data.message);
+            }
+        };
+    </script>
+</body>
+</html>

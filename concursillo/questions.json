@@ -1,0 +1,152 @@
+[
+  {
+    "question": "¿Cuál es la capital de España?",
+    "options": ["Barcelona", "Madrid", "Valencia", "Sevilla"],
+    "correct": 1,
+    "difficulty": "easy"
+  },
+  {
+    "question": "¿Cuántos continentes hay en el mundo?",
+    "options": ["5", "6", "7", "8"],
+    "correct": 2,
+    "difficulty": "easy"
+  },
+  {
+    "question": "¿Qué animal es conocido como el 'Rey de la Selva'?",
+    "options": ["Tigre", "León", "Leopardo", "Jaguar"],
+    "correct": 1,
+    "difficulty": "easy"
+  },
+  {
+    "question": "¿En qué año se fundó YouTube?",
+    "options": ["2004", "2005", "2006", "2007"],
+    "correct": 1,
+    "difficulty": "easy"
+  },
+  {
+    "question": "¿Cuál es el océano más grande del mundo?",
+    "options": ["Atlántico", "Índico", "Pacífico", "Ártico"],
+    "correct": 2,
+    "difficulty": "easy"
+  },
+  {
+    "question": "¿En qué año llegó el hombre a la Luna?",
+    "options": ["1967", "1969", "1971", "1973"],
+    "correct": 1,
+    "difficulty": "medium"
+  },
+  {
+    "question": "¿Cuál es la velocidad de la luz en el vacío?",
+    "options": ["299,792,458 m/s", "300,000,000 m/s", "299,000,000 m/s", "301,000,000 m/s"],
+    "correct": 0,
+    "difficulty": "medium"
+  },
+  {
+    "question": "¿Quién pintó 'La noche estrellada'?",
+    "options": ["Pablo Picasso", "Vincent van Gogh", "Leonardo da Vinci", "Claude Monet"],
+    "correct": 1,
+    "difficulty": "medium"
+  },
+  {
+    "question": "¿Cuál es la moneda oficial de Japón?",
+    "options": ["Won", "Yuan", "Yen", "Dong"],
+    "correct": 2,
+    "difficulty": "medium"
+  },
+  {
+    "question": "¿En qué año se cayó el Muro de Berlín?",
+    "options": ["1987", "1988", "1989", "1990"],
+    "correct": 2,
+    "difficulty": "medium"
+  },
+  {
+    "question": "¿Cuál es el elemento químico con símbolo Au?",
+    "options": ["Plata", "Oro", "Aluminio", "Argón"],
+    "correct": 1,
+    "difficulty": "medium"
+  },
+  {
+    "question": "¿Cuál es la raíz cuadrada de 144?",
+    "options": ["11", "12", "13", "14"],
+    "correct": 1,
+    "difficulty": "medium"
+  },
+  {
+    "question": "¿Cuántos huesos tiene el cuerpo humano adulto?",
+    "options": ["204", "206", "208", "210"],
+    "correct": 1,
+    "difficulty": "hard"
+  },
+  {
+    "question": "¿En qué año se firmó el Tratado de Versalles?",
+    "options": ["1918", "1919", "1920", "1921"],
+    "correct": 1,
+    "difficulty": "hard"
+  },
+  {
+    "question": "¿Cuál es la constante de Planck (aproximadamente)?",
+    "options": ["6.62 × 10⁻³⁴ J·s", "6.67 × 10⁻³⁴ J·s", "6.02 × 10²³ mol⁻¹", "3.14 × 10⁻³⁴ J·s"],
+    "correct": 0,
+    "difficulty": "hard"
+  },
+  {
+    "question": "¿Cuál es el único mamífero capaz de volar verdaderamente?",
+    "options": ["Ardilla voladora", "Murciélago", "Lémur volador", "Opossum planeador"],
+    "correct": 1,
+    "difficulty": "hard"
+  },
+  {
+    "question": "¿En qué año se descubrió la estructura del ADN?",
+    "options": ["1951", "1952", "1953", "1954"],
+    "correct": 2,
+    "difficulty": "hard"
+  },
+  {
+    "question": "¿Cuál es el planeta más caliente del sistema solar?",
+    "options": ["Mercurio", "Venus", "Marte", "Júpiter"],
+    "correct": 1,
+    "difficulty": "hard"
+  },
+  {
+    "question": "¿Quién desarrolló la teoría de la relatividad general?",
+    "options": ["Isaac Newton", "Albert Einstein", "Stephen Hawking", "Niels Bohr"],
+    "correct": 1,
+    "difficulty": "easy"
+  },
+  {
+    "question": "¿Cuál es la fórmula química del agua?",
+    "options": ["H2O", "H2O2", "HO2", "H3O"],
+    "correct": 0,
+    "difficulty": "easy"
+  },
+  {
+    "question": "¿En qué deporte se usa una raqueta?",
+    "options": ["Fútbol", "Baloncesto", "Tenis", "Natación"],
+    "correct": 2,
+    "difficulty": "easy"
+  },
+  {
+    "question": "¿Cuántos grados tiene un círculo completo?",
+    "options": ["180°", "360°", "270°", "90°"],
+    "correct": 1,
+    "difficulty": "easy"
+  },
+  {
+    "question": "¿Cuál es el río más largo del mundo?",
+    "options": ["Amazonas", "Nilo", "Yangtsé", "Misisipi"],
+    "correct": 1,
+    "difficulty": "medium"
+  },
+  {
+    "question": "¿En qué continente se encuentra Egipto?",
+    "options": ["Asia", "Europa", "África", "América"],
+    "correct": 2,
+    "difficulty": "easy"
+  },
+  {
+    "question": "¿Cuál es el metal más abundante en la corteza terrestre?",
+    "options": ["Hierro", "Aluminio", "Cobre", "Oro"],
+    "correct": 1,
+    "difficulty": "hard"
+  }
+]
